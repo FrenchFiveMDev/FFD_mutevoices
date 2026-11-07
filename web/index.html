@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Voix du personnage</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: system-ui, Arial, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      background: #14161c;
+      color: #fff;
+      display: flex;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 480px;
+    }
+
+    h1 {
+      font-size: 20px;
+      margin: 0 0 16px;
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      padding: 14px;
+      border-radius: 10px;
+      border: 1px solid #3a3f4b;
+      background: #0e1015;
+      color: #fff;
+      font-size: 17px;
+      outline: none;
+    }
+
+    textarea {
+      height: 110px;
+      resize: none;
+      margin-top: 12px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 14px;
+      font-size: 16px;
+      color: #fff;
+      background: #2a2f3a;
+      cursor: pointer;
+    }
+
+    button.primary {
+      background: #2b7de9;
+      width: 100%;
+      margin-top: 12px;
+    }
+
+    #mic {
+      width: 100%;
+      height: 90px;
+      font-size: 40px;
+      margin-top: 12px;
+      background: #2b7de9;
+    }
+
+    #mic.rec {
+      background: #d62f3a;
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      50% {
+        opacity: .65;
+      }
+    }
+
+    .modes {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .modes button {
+      flex: 1;
+      padding: 10px 4px;
+      font-size: 14px;
+    }
+
+    .modes button.active {
+      background: #2b7de9;
+    }
+
+    #status {
+      margin-top: 12px;
+      min-height: 22px;
+      font-size: 14px;
+      opacity: .85;
+    }
+
+    label {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 12px;
+      font-size: 14px;
+    }
+
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="card">
+    <h1>🗨️ Voix du personnage</h1>
+
+    <div id="login">
+      <input id="code" placeholder="Code affiché en jeu" maxlength="6" autocapitalize="characters" autocomplete="off">
+      <button class="primary" id="connect">Se connecter</button>
+    </div>
+
+    <div id="app" class="hidden">
+      <button id="mic">🎤</button>
+      <textarea id="text" maxlength="200" placeholder="Appuie sur le micro et parle, ou écris ici…"></textarea>
+      <div class="modes">
+        <button data-mode="whisper">🤫 Chuchoter</button>
+        <button data-mode="normal" class="active">💬 Normal</button>
+        <button data-mode="shout">📢 Crier</button>
+      </div>
+      <label><input type="checkbox" id="auto" style="width:auto"> Envoyer automatiquement après la dictée</label>
+      <button class="primary" id="send">Parler dans le jeu</button>
+    </div>
+
+    <div id="status"></div>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    let code = '', mode = 'normal', rec = null;
+    const status = t => $('status').textContent = t;
+
+    async function api(path, body) {
+      const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      let j = {}; try { j = await r.json(); } catch (e) { }
+      return j;
+    }
+
+    async function connect(c) {
+      c = (c || '').trim().toUpperCase();
+      const j = await api('check', { code: c });
+      if (j.ok) {
+        code = c;
+        try { localStorage.setItem('muet_code', c); } catch (e) { }
+        $('login').classList.add('hidden'); $('app').classList.remove('hidden');
+        status('Connecté en tant que ' + j.name);
+      } else {
+        status(j.error === 'trop_de_tentatives' ? 'Trop de tentatives, réessaie dans 1 minute.' : 'Code invalide ou expiré (refais /dire-web en jeu).');
+      }
+    }
+    $('connect').onclick = () => connect($('code').value);
+    try { const s = localStorage.getItem('muet_code'); if (s) connect(s); } catch (e) { }
+
+    async function send() {
+      const text = $('text').value.trim();
+      if (!text) return;
+      const j = await api('say', { code, text, mode });
+      if (j.ok) { $('text').value = ''; status('✅ Envoyé'); }
+      else if (j.error === 'cooldown') status('Doucement, réessaie dans un instant.');
+      else if (j.error === 'code_invalide') status('Session expirée : refais /dire-web en jeu.');
+      else status('Erreur : ' + (j.error || 'inconnue'));
+    }
+    $('send').onclick = send;
+
+    document.querySelectorAll('.modes button').forEach(b => b.onclick = () => {
+      mode = b.dataset.mode;
+      document.querySelectorAll('.modes button').forEach(x => x.classList.toggle('active', x === b));
+    });
+
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    $('mic').onclick = () => {
+      if (!SR) return status("Ton navigateur ne gère pas la dictée. Utilise Chrome (Android/PC) ou Safari (iPhone).");
+      if (rec) { rec.stop(); return; }
+      rec = new SR();
+      rec.lang = 'fr-FR'; rec.interimResults = true; rec.continuous = false;
+      rec.onstart = () => { $('mic').classList.add('rec'); status('🎙️ Je t\'écoute…'); };
+      rec.onresult = e => {
+        $('text').value = Array.from(e.results).map(x => x[0].transcript).join(' ');
+        if (e.results[e.results.length - 1].isFinal && $('auto').checked) send();
+      };
+      rec.onerror = e => status('Micro : ' + e.error + (e.error === 'not-allowed' ? ' (autorise le micro, et utilise une page en HTTPS)' : ''));
+      rec.onend = () => { $('mic').classList.remove('rec'); rec = null; };
+      try { rec.start(); } catch (e) { rec = null; }
+    };
+  </script>
+</body>
+
+</html>

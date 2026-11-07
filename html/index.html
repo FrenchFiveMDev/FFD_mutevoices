@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: 'Segoe UI', Arial, sans-serif;
+    }
+
+    html,
+    body {
+      margin: 0;
+      background: transparent;
+      overflow: hidden;
+    }
+
+    #panel {
+      display: none;
+      position: fixed;
+      left: 50%;
+      bottom: 40px;
+      transform: translateX(-50%);
+      width: 560px;
+      max-width: 95vw;
+      padding: 18px;
+      border-radius: 14px;
+      background: rgba(20, 22, 28, .94);
+      color: #fff;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, .6);
+    }
+
+    h3 {
+      margin: 0 0 12px;
+      font-size: 15px;
+      font-weight: 600;
+      opacity: .9;
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+    }
+
+    input {
+      flex: 1;
+      padding: 12px 14px;
+      border-radius: 8px;
+      border: 1px solid #3a3f4b;
+      background: #12141a;
+      color: #fff;
+      font-size: 15px;
+      outline: none;
+    }
+
+    input:focus {
+      border-color: #4da3ff;
+    }
+
+    button {
+      border: 0;
+      border-radius: 8px;
+      padding: 10px 14px;
+      cursor: pointer;
+      background: #2a2f3a;
+      color: #fff;
+      font-size: 13px;
+    }
+
+    button:hover {
+      background: #3a4150;
+    }
+
+    button.active {
+      background: #2b7de9;
+    }
+
+    #send {
+      background: #2b7de9;
+      font-size: 14px;
+    }
+
+    .modes {
+      margin: 10px 0;
+    }
+
+    .modes button {
+      flex: 1;
+    }
+
+    .phrases {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    #mic.rec {
+      background: #d62f3a;
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      50% {
+        opacity: .6;
+      }
+    }
+
+    #msg {
+      display: none;
+      margin-top: 10px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: #3a2a2a;
+      font-size: 12px;
+    }
+
+    #pair {
+      margin-top: 10px;
+      font-size: 12px;
+      opacity: .85;
+      text-align: center;
+    }
+
+    #pair b {
+      font-size: 18px;
+      letter-spacing: 3px;
+      color: #4da3ff;
+    }
+
+    .hint {
+      margin-top: 10px;
+      font-size: 11px;
+      opacity: .5;
+      text-align: center;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="panel">
+    <h3>🗨️ Parler</h3>
+    <div class="row">
+      <input id="text" maxlength="200" placeholder="Écris ce que ton personnage dit…" autocomplete="off">
+      <button id="mic" title="Dicter à la voix">🎤</button>
+      <button id="send">Parler</button>
+    </div>
+    <div class="row modes">
+      <button data-mode="whisper">🤫 Chuchoter</button>
+      <button data-mode="normal" class="active">💬 Normal</button>
+      <button data-mode="shout">📢 Crier</button>
+    </div>
+    <div class="phrases" id="phrases"></div>
+    <div id="msg"></div>
+    <div class="row" style="margin-top:10px"><button id="pairBtn" style="flex:1">📱 Dicter depuis mon téléphone /
+        navigateur</button></div>
+    <div id="pair"></div>
+    <div class="hint">Entrée = parler · Échap = fermer</div>
+  </div>
+
+  <script>
+    const panel = document.getElementById('panel');
+    const input = document.getElementById('text');
+    let mode = 'normal';
+
+    const post = (name, data) =>
+      fetch(`https://${GetParentResourceName()}/${name}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data || {})
+      });
+
+    function send(text) {
+      text = (text || '').trim();
+      if (!text) return;
+      input.value = '';
+      post('say', { text, mode });
+    }
+
+    document.getElementById('send').onclick = () => send(input.value);
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') send(input.value);
+      if (e.key === 'Escape') post('close');
+    });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') post('close'); });
+
+    document.querySelectorAll('.modes button').forEach(b => {
+      b.onclick = () => {
+        mode = b.dataset.mode;
+        document.querySelectorAll('.modes button').forEach(x => x.classList.toggle('active', x === b));
+        input.focus();
+      };
+    });
+
+
+    // ───── Dictée vocale (si supportée par le jeu) ─────
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const mic = document.getElementById('mic');
+    const msg = document.getElementById('msg');
+    let rec = null, recLang = 'fr-FR', autoSend = false;
+
+    function showMsg(t) { msg.textContent = t; msg.style.display = 'block'; }
+
+    mic.onclick = () => {
+      msg.style.display = 'none';
+      if (rec) { rec.stop(); return; }
+      if (!SR) return showMsg("Le micro n'est pas supporté dans le jeu. Utilise le bouton « téléphone / navigateur » ci-dessous.");
+      rec = new SR();
+      rec.lang = recLang; rec.interimResults = true; rec.continuous = false;
+      rec.onstart = () => mic.classList.add('rec');
+      rec.onresult = e => {
+        const r = e.results[e.results.length - 1];
+        input.value = Array.from(e.results).map(x => x[0].transcript).join(' ');
+        if (r.isFinal && autoSend) send(input.value);
+      };
+      rec.onerror = e => showMsg("Micro indisponible dans le jeu (" + e.error + "). Utilise le mode téléphone / navigateur.");
+      rec.onend = () => { mic.classList.remove('rec'); rec = null; input.focus(); };
+      try { rec.start(); } catch (err) { rec = null; showMsg("Impossible de démarrer le micro."); }
+    };
+
+    document.getElementById('pairBtn').onclick = () => post('pair');
+
+    // ───── Synthèse vocale ─────
+    const queue = [];
+    let playing = false;
+
+    function fallback(item, done) {
+      try {
+        const u = new SpeechSynthesisUtterance(item.text);
+        u.lang = item.lang; u.volume = item.volume;
+        u.onend = done; u.onerror = done;
+        speechSynthesis.speak(u);
+      } catch (e) { done(); }
+    }
+
+    function next() {
+      if (playing || !queue.length) return;
+      playing = true;
+      const item = queue.shift();
+
+      // Garde-fou : une seule voix par message, quoi qu'il arrive
+      let finished = false, usedFallback = false;
+      const done = () => {
+        if (finished) return;
+        finished = true;
+        playing = false;
+        next();
+      };
+      const useFallback = () => {
+        if (finished || usedFallback) return;
+        usedFallback = true;
+        fallback(item, done);
+      };
+
+      const url = 'https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl='
+        + item.lang + '&q=' + encodeURIComponent(item.text);
+      const audio = new Audio(url);
+      audio.volume = Math.min(1, Math.max(0, item.volume));
+      audio.onended = done;
+      audio.onerror = useFallback;
+      audio.play().catch(useFallback);
+
+      // Sécurité : débloque la file si rien ne se passe
+      setTimeout(done, 15000);
+    }
+
+    window.addEventListener('message', e => {
+      const d = e.data;
+      if (d.action === 'open') {
+        const box = document.getElementById('phrases');
+        box.innerHTML = '';
+        (d.phrases || []).forEach(p => {
+          const b = document.createElement('button');
+          b.textContent = p; b.onclick = () => send(p);
+          box.appendChild(b);
+        });
+        recLang = d.recLang || recLang; autoSend = !!d.autoSend;
+        msg.style.display = 'none';
+        panel.style.display = 'block';
+        input.value = '';
+        setTimeout(() => input.focus(), 50);
+      } else if (d.action === 'code') {
+        document.getElementById('pair').innerHTML =
+          'Code : <b>' + d.code + '</b><br>' + (d.url ? 'Page : ' + d.url : "Ouvre la page web du serveur et saisis ce code.");
+      } else if (d.action === 'close') {
+        panel.style.display = 'none';
+      } else if (d.action === 'speak') {
+        queue.push({ text: d.text, volume: d.volume, lang: d.lang });
+        next();
+      }
+    });
+  </script>
+</body>
+
+</html>
