@@ -45,10 +45,6 @@ end, false)
 
 RegisterNetEvent('muet:code', function(code, url)
     SendNUIMessage({ action = 'code', code = code, url = url })
-    TriggerEvent('chat:addMessage', {
-        color = { 80, 170, 255 },
-        args = { 'Voix', ('Code de liaison : %s%s'):format(code, (url and url ~= '') and (' — page : ' .. url) or '') },
-    })
 end)
 
 RegisterNUICallback('close', function(_, cb)
