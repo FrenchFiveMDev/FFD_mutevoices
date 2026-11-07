@@ -204,20 +204,84 @@
       document.querySelectorAll('.modes button').forEach(x => x.classList.toggle('active', x === b));
     });
 
+
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    let rec = null;
+    let isListening = false;
+
+    function resetMic() {
+      isListening = false;
+      $('mic').classList.remove('rec');
+      rec = null;
+    }
+
     $('mic').onclick = () => {
-      if (!SR) return status("Ton navigateur ne gère pas la dictée. Utilise Chrome (Android/PC) ou Safari (iPhone).");
-      if (rec) { rec.stop(); return; }
-      rec = new SR();
-      rec.lang = 'fr-FR'; rec.interimResults = true; rec.continuous = false;
-      rec.onstart = () => { $('mic').classList.add('rec'); status('🎙️ Je t\'écoute…'); };
-      rec.onresult = e => {
-        $('text').value = Array.from(e.results).map(x => x[0].transcript).join(' ');
-        if (e.results[e.results.length - 1].isFinal && $('auto').checked) send();
+      if (!SR) {
+        status("Ton navigateur ne prend pas en charge la dictée.");
+        return;
+      }
+
+      if (isListening && rec) {
+        try {
+          rec.stop();
+        } catch (e) {
+          resetMic();
+        }
+        return;
+      }
+
+      // Toujours créer une nouvelle session
+      const recognition = new SR();
+      rec = recognition;
+
+      recognition.lang = 'fr-FR';
+      recognition.interimResults = true;
+      recognition.continuous = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => {
+        isListening = true;
+        $('mic').classList.add('rec');
+        status('🎙️ Je t’écoute…');
       };
-      rec.onerror = e => status('Micro : ' + e.error + (e.error === 'not-allowed' ? ' (autorise le micro, et utilise une page en HTTPS)' : ''));
-      rec.onend = () => { $('mic').classList.remove('rec'); rec = null; };
-      try { rec.start(); } catch (e) { rec = null; }
+
+      recognition.onresult = (e) => {
+        const results = Array.from(e.results);
+        $('text').value = results.map(x => x[0].transcript).join(' ');
+
+        const last = results[results.length - 1];
+
+        if (last.isFinal && $('auto').checked) {
+          send();
+        }
+      };
+
+      recognition.onerror = (e) => {
+        console.error('Microphone :', e.error);
+
+        if (e.error === 'not-allowed') {
+          status('Autorise le microphone dans les paramètres du navigateur.');
+        } else if (e.error === 'no-speech') {
+          status('Aucune parole détectée. Réessaie.');
+        } else if (e.error !== 'aborted') {
+          status('Erreur microphone : ' + e.error);
+        }
+
+        resetMic();
+      };
+
+      recognition.onend = () => {
+        resetMic();
+      };
+
+      try {
+        recognition.start();
+      } catch (e) {
+        console.error('Impossible de démarrer le micro :', e);
+        resetMic();
+        status('Impossible de démarrer le microphone. Réessaie.');
+      }
     };
   </script>
 </body>
