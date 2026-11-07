@@ -149,10 +149,28 @@
     let code = '', mode = 'normal', rec = null;
     const status = t => $('status').textContent = t;
 
+
     async function api(path, body) {
-      const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      let j = {}; try { j = await r.json(); } catch (e) { }
-      return j;
+      try {
+        const r = await fetch('/' + path.replace(/^\/+/, ''), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(body)
+        });
+
+        let j = {};
+        try {
+          j = await r.json();
+        } catch (e) { }
+
+        return j;
+      } catch (e) {
+        console.error('Erreur API :', e);
+        status('Impossible de contacter le serveur.');
+        return { ok: false, error: 'network_error' };
+      }
     }
 
     async function connect(c) {
