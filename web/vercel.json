@@ -2,11 +2,11 @@
     "rewrites": [
         {
             "source": "/check",
-            "destination": "http://82.165.249.176:30121/FFD_mutevoices/check"
+            "destination": "http://PUT_CONNECT_WITH_ENDPOINT/FFD_mutevoices/check"
         },
         {
             "source": "/say",
-            "destination": "http://82.165.249.176:30121/FFD_mutevoices/say"
+            "destination": "http://PUT_CONNECT_WITH_ENDPOINT/FFD_mutevoices/say"
         }
     ]
 }
