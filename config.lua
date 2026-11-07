@@ -29,5 +29,5 @@ Config.AutoSend     = false   -- true = envoie tout de suite après la dictée (
 -- Mode téléphone / navigateur : page web servie par le serveur.
 -- Mets ici l'URL HTTPS publique de la ressource (le micro exige HTTPS), ex :
 --   'https://xxxxxx-yyyyyy.users.cfx.re/muet_voice/'   ou   'https://tonserveur.fr/muet_voice/'
-Config.WebUrl       = ''
+Config.WebUrl       = 'https://ffdmutevoices.vercel.app/'
 Config.WebCodeTTL   = 7200 -- durée de validité du code de liaison (secondes)
