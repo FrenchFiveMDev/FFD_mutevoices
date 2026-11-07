@@ -1,5 +1,4 @@
 Config              = {}
-
 -- Si true : seuls les joueurs avec l'ACE "muet.use" peuvent l'utiliser
 -- (dans server.cfg : add_ace identifier.license:XXXX muet.use allow)
 Config.RequireAce   = false
@@ -23,11 +22,9 @@ Config.QuickPhrases = {
 }
 
 -- ───────────── Dictée vocale (micro → texte) ─────────────
-Config.RecLang      = 'fr-FR' -- langue de reconnaissance vocale
+Config.RecLang      = 'fr-FR'
 Config.AutoSend     = false   -- true = envoie tout de suite après la dictée (false = le joueur relit/corrige avant)
 
 -- Mode téléphone / navigateur : page web servie par le serveur.
--- Mets ici l'URL HTTPS publique de la ressource (le micro exige HTTPS), ex :
---   'https://xxxxxx-yyyyyy.users.cfx.re/muet_voice/'   ou   'https://tonserveur.fr/muet_voice/'
 Config.WebUrl       = 'https://ffdmutevoices.vercel.app/'
 Config.WebCodeTTL   = 7200 -- durée de validité du code de liaison (secondes)
